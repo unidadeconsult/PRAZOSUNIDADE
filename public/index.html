@@ -512,11 +512,26 @@
     position: fixed; inset: 0; width: 100%; height: 100%; z-index: 80;
     pointer-events: none; display: none;
   }
+
+  /* ---------- palminhas ao avançar de etapa ---------- */
+  #clap-stack {
+    position: fixed; left: 50%; bottom: 96px; width: 1px; height: 1px; z-index: 85; pointer-events: none;
+  }
+  .clap-particle {
+    position: absolute; bottom: 0; font-size: 22px; opacity: 0;
+    animation: clapPop 0.9s ease-out forwards;
+  }
+  @keyframes clapPop {
+    0% { opacity: 0; transform: translate(var(--dx, 0), 0) scale(0.6) rotate(var(--rot, 0deg)); }
+    18% { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--dx, 0), -70px) scale(1.05) rotate(var(--rot, 0deg)); }
+  }
 </style>
 </head>
 <body>
 
 <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+<div id="clap-stack" aria-hidden="true"></div>
 <div id="toast-stack" aria-live="polite"></div>
 
 <div class="wrap">
@@ -1128,9 +1143,29 @@
     requestAnimationFrame(frame);
   }
 
+  function launchClapBurst() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const stack = document.getElementById("clap-stack");
+    const count = 6;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement("span");
+      el.className = "clap-particle";
+      el.textContent = "👏";
+      const dx = (Math.random() - 0.5) * 140;
+      const rot = (Math.random() - 0.5) * 40;
+      el.style.setProperty("--dx", `${dx}px`);
+      el.style.setProperty("--rot", `${rot}deg`);
+      el.style.left = `${(Math.random() - 0.5) * 40}px`;
+      el.style.animationDelay = `${Math.random() * 0.15}s`;
+      stack.appendChild(el);
+      window.setTimeout(() => el.remove(), 1200);
+    }
+  }
+
   function celebrateStage(stage, cliente) {
     if (stage === "andamento") {
       showToast(pick(ANDAMENTO_PHRASES));
+      launchClapBurst();
     } else if (stage === "concluido") {
       showToast(pick(CONCLUIDO_PHRASES), { celebrate: true });
       launchConfetti();
