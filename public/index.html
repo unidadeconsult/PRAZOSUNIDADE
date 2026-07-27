@@ -372,6 +372,30 @@
   .overdue-cta { font-size: 12px; font-weight: 700; opacity: 0.9; white-space: nowrap; }
   @keyframes pulseIcon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
+  /* ---------- backup reminder banner (quinta/sexta) ---------- */
+  .reminder-banner {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: var(--chrome); color: #fff; border: none; border-radius: 16px;
+    padding: 11px 12px 11px 16px; margin-bottom: 10px; box-shadow: var(--shadow-hover);
+    opacity: 0; animation: rise 0.4s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .reminder-banner[hidden] { display: none; }
+  .reminder-banner .overdue-icon { animation: none; }
+  .reminder-cta {
+    font-size: 12px; font-weight: 800; white-space: nowrap; padding: 7px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.16); color: #fff; cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .reminder-cta:hover { background: rgba(255,255,255,0.28); }
+  .reminder-cta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .reminder-dismiss {
+    display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+    border-radius: 8px; border: none; background: transparent; color: rgba(255,255,255,0.75); cursor: pointer;
+    font-size: 14px; line-height: 1; transition: background 0.15s ease, color 0.15s ease; flex: none;
+  }
+  .reminder-dismiss:hover { background: rgba(255,255,255,0.16); color: #fff; }
+  .reminder-dismiss:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
   /* ---------- extra filter row ---------- */
   .filter-row { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-bottom: 16px; }
   .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -488,6 +512,13 @@
     <span class="overdue-text" id="unassigned-text"></span>
     <span class="overdue-cta">Ver sem responsável →</span>
   </button>
+
+  <div class="reminder-banner" id="backup-banner" role="status" hidden>
+    <span class="overdue-icon" aria-hidden="true">💾</span>
+    <span class="overdue-text" id="backup-text"></span>
+    <button class="reminder-cta" id="backup-export-btn" type="button">Exportar agora</button>
+    <button class="reminder-dismiss" id="backup-dismiss-btn" type="button" title="Dispensar por hoje" aria-label="Dispensar lembrete de hoje">✕</button>
+  </div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -1139,7 +1170,7 @@
   });
 
   // ---------- export / import ----------
-  document.getElementById("export-btn").addEventListener("click", () => {
+  function doExport() {
     const payload = JSON.stringify({ exportedAt: new Date().toISOString(), lastModified: lastModified || new Date().toISOString(), items }, null, 2);
     const filename = `prazos-unidade-consult-${todayMidnight.toISOString().slice(0, 10)}.json`;
     const blob = new Blob([payload], { type: "application/json" });
@@ -1147,7 +1178,8 @@
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
-  });
+  }
+  document.getElementById("export-btn").addEventListener("click", doExport);
 
   const importInput = document.getElementById("import-file");
   document.getElementById("import-btn").addEventListener("click", () => importInput.click());
@@ -1182,8 +1214,34 @@
     reader.readAsText(file);
   });
 
+  // ---------- lembrete de backup (quinta e sexta) ----------
+  function backupDismissKey() {
+    return "uc-backup-dismissed-" + todayMidnight.toISOString().slice(0, 10);
+  }
+  function checkBackupReminder() {
+    const banner = document.getElementById("backup-banner");
+    const day = todayMidnight.getDay(); // 0=dom … 4=qui, 5=sex
+    if (day !== 4 && day !== 5) { banner.hidden = true; return; }
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(backupDismissKey()) === "1"; } catch (e) {}
+    if (dismissed) { banner.hidden = true; return; }
+    const dayName = day === 4 ? "quinta" : "sexta";
+    document.getElementById("backup-text").textContent = `Hoje é ${dayName}-feira — hora de exportar um backup do painel.`;
+    banner.hidden = false;
+  }
+  document.getElementById("backup-export-btn").addEventListener("click", () => {
+    doExport();
+    try { localStorage.setItem(backupDismissKey(), "1"); } catch (e) {}
+    document.getElementById("backup-banner").hidden = true;
+  });
+  document.getElementById("backup-dismiss-btn").addEventListener("click", () => {
+    try { localStorage.setItem(backupDismissKey(), "1"); } catch (e) {}
+    document.getElementById("backup-banner").hidden = true;
+  });
+
   // ---------- polling (sincronização entre os dois usuários) ----------
   async function pollRefresh() {
+    checkBackupReminder();
     if (dialog.open) return; // não interromper quem está editando
     try {
       const data = await fetchState();
@@ -1211,6 +1269,7 @@
     }
     renderLastModified();
     renderAll();
+    checkBackupReminder();
   }
   init();
 </script>
