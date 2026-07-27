@@ -442,8 +442,16 @@
   .done-toggle:hover { color: var(--ink); }
   .done-toggle .chev { transition: transform 0.2s ease; margin-left: auto; }
   .done-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
-  #done-body { margin-top: 12px; }
-  #done-body[hidden] { display: none; }
+  .collapsible-body { margin-top: 12px; }
+  .collapsible-body[hidden] { display: none; }
+
+  /* ---------- Backups automáticos ---------- */
+  .backup-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--surface-border);
+    border-radius: 12px; background: var(--surface); margin-bottom: 8px; font-size: 13px; box-shadow: var(--shadow);
+  }
+  .backup-date { font-weight: 700; font-family: var(--font-mono); color: var(--ink); }
+  .backup-count { color: var(--ink-faint); margin-right: auto; font-size: 12px; }
 
   /* ---------- Modal ---------- */
   dialog#add-dialog {
@@ -572,8 +580,16 @@
     <span id="done-toggle-label">Concluídos (0)</span>
     <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
   </button>
-  <div id="done-body" hidden>
-    <div class="grid" id="done-grid" style="margin-top:12px"></div>
+  <div id="done-body" class="collapsible-body" hidden>
+    <div class="grid" id="done-grid"></div>
+  </div>
+
+  <button class="done-toggle" id="backups-toggle" aria-expanded="false" aria-controls="backups-body" style="margin-top:10px">
+    <span>Backups automáticos</span>
+    <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
+  <div id="backups-body" class="collapsible-body" hidden>
+    <div id="backups-list"></div>
   </div>
 
   <footer>
@@ -1066,6 +1082,61 @@
     const expanded = doneToggle.getAttribute("aria-expanded") === "true";
     doneToggle.setAttribute("aria-expanded", String(!expanded));
     doneBody.hidden = expanded;
+  });
+
+  // ---------- backups automáticos ----------
+  const backupsToggle = document.getElementById("backups-toggle");
+  const backupsBody = document.getElementById("backups-body");
+  let backupsLoaded = false;
+
+  async function loadBackupsList() {
+    const list = document.getElementById("backups-list");
+    list.innerHTML = '<p class="empty">Carregando…</p>';
+    try {
+      const res = await fetch("/api/snapshots");
+      if (!res.ok) throw new Error("falha ao listar");
+      const snaps = await res.json();
+      backupsLoaded = true;
+      if (!snaps.length) {
+        list.innerHTML = '<p class="empty">Ainda não há backups automáticos — o primeiro é criado poucas horas depois do painel entrar no ar.</p>';
+        return;
+      }
+      list.innerHTML = snaps.map((s) => `
+        <div class="backup-row">
+          <span class="backup-date">${new Date(s.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+          <span class="backup-count">${s.itemCount} prazos</span>
+          <button type="button" class="btn" data-restore-id="${s.id}">Restaurar</button>
+        </div>`).join("");
+      list.querySelectorAll("[data-restore-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const ok = confirm("Restaurar esse backup vai SUBSTITUIR os dados atuais do painel para os dois usuários.\n\nContinuar?");
+          if (!ok) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/snapshots/${btn.dataset.restoreId}/restore`, { method: "POST" });
+            if (!res.ok) throw new Error("falha ao restaurar");
+            const data = await res.json();
+            items = data.items;
+            lastModified = data.lastModified;
+            renderLastModified();
+            renderAll();
+            alert("Backup restaurado.");
+          } catch (err) {
+            alert("Não foi possível restaurar esse backup agora.");
+            btn.disabled = false;
+          }
+        });
+      });
+    } catch (err) {
+      list.innerHTML = '<p class="empty">Não foi possível carregar os backups agora.</p>';
+    }
+  }
+
+  backupsToggle.addEventListener("click", () => {
+    const expanded = backupsToggle.getAttribute("aria-expanded") === "true";
+    backupsToggle.setAttribute("aria-expanded", String(!expanded));
+    backupsBody.hidden = expanded;
+    if (!expanded && !backupsLoaded) loadBackupsList();
   });
 
   // ---------- add / edit dialog ----------
