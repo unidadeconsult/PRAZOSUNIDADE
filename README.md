@@ -20,11 +20,17 @@ Painel para acompanhar prazos processuais junto ao INPI, organizados por urgênc
 
 3. **Conectar o banco ao serviço do painel**: no serviço do painel (não no banco), abra a aba `Variables` e adicione uma referência à variável `DATABASE_URL` do serviço Postgres (o Railway tem um botão para "Add Reference"/importar variável de outro serviço — selecione o Postgres criado no passo 2). Isso preenche `DATABASE_URL` automaticamente, sem precisar copiar senha na mão.
 
-4. **Deploy**: o Railway builda e sobe o serviço automaticamente a cada push nesta branch. Na primeira execução, o servidor cria a tabela e popula com os 32 prazos originais sozinho (não precisa rodar nenhum comando manual).
+4. **Definir o login do painel**: ainda na aba `Variables` do serviço do painel, adicione duas variáveis com `New Variable` (valores escolhidos por vocês, não copiem de nenhum exemplo):
+   - `APP_USERNAME` — o usuário de acesso.
+   - `APP_PASSWORD` — a senha de acesso.
 
-5. **Gerar o domínio**: na aba `Settings` → `Networking` do serviço do painel, clique em `Generate Domain` para ganhar uma URL pública (ou aponte um domínio próprio, se preferirem).
+   Sem essas duas variáveis definidas, o painel bloqueia o acesso de todo mundo por segurança (em vez de ficar aberto por engano) — então esse passo não é opcional.
 
-6. **Conferir**: abra `https://<seu-dominio>/api/health` — deve responder `{"ok":true}`. Depois abra a URL normal e o painel deve carregar com os prazos.
+5. **Deploy**: o Railway builda e sobe o serviço automaticamente a cada push nesta branch, e também sempre que uma variável é alterada. Na primeira execução, o servidor cria a tabela e popula com os 32 prazos originais sozinho (não precisa rodar nenhum comando manual).
+
+6. **Gerar o domínio**: na aba `Settings` → `Networking` do serviço do painel, clique em `Generate Domain` para ganhar uma URL pública (ou aponte um domínio próprio, se preferirem).
+
+7. **Conferir**: abra `https://<seu-dominio>/api/health` — deve responder `{"ok":true}` (essa rota não pede login, é só para checagem de saúde do serviço). Depois abra a URL normal — o navegador deve pedir usuário e senha antes de mostrar o painel.
 
 ## Rodar localmente (para testar antes de mandar pro Railway)
 
@@ -33,9 +39,15 @@ Requer Node 18+ e um Postgres acessível.
 ```bash
 npm install
 export DATABASE_URL="postgres://usuario:senha@localhost:5432/painel_prazos"
+export APP_USERNAME="teste"
+export APP_PASSWORD="teste"
 npm start
-# abra http://localhost:3000
+# abra http://localhost:3000 (vai pedir usuário/senha)
 ```
+
+## Sobre o login
+
+O painel usa autenticação HTTP Basic — o próprio navegador mostra a caixa de usuário/senha, sem precisar de tela de login customizada. É um único usuário e senha compartilhado entre os dois usuários (não tem conta individual). Para trocar a senha, basta editar as variáveis `APP_USERNAME`/`APP_PASSWORD` nas Variables do Railway — o serviço reinicia sozinho e passa a valer a nova senha.
 
 ## Sobre conflitos entre os dois usuários
 

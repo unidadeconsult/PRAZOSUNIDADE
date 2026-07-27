@@ -1,10 +1,43 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { Pool } = require("pg");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const APP_USERNAME = process.env.APP_USERNAME;
+const APP_PASSWORD = process.env.APP_PASSWORD;
+
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a)); const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) { crypto.timingSafeEqual(bufA, bufA); return false; }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// Basic Auth simples: protege tanto a página quanto a API por trás de um único usuário/senha
+// compartilhado. Se as variáveis não estiverem configuradas, bloqueia tudo (falha fechada)
+// em vez de deixar o painel aberto por engano.
+function requireAuth(req, res, next) {
+  if (!APP_USERNAME || !APP_PASSWORD) {
+    console.error("APP_USERNAME/APP_PASSWORD não definidas — bloqueando acesso por segurança.");
+    return res.status(503).send("Painel não configurado corretamente. Contate o administrador.");
+  }
+  const [scheme, encoded] = (req.headers.authorization || "").split(" ");
+  if (scheme === "Basic" && encoded) {
+    const decoded = Buffer.from(encoded, "base64").toString("utf-8");
+    const sep = decoded.indexOf(":");
+    const user = decoded.slice(0, sep);
+    const pass = decoded.slice(sep + 1);
+    if (safeEqual(user, APP_USERNAME) && safeEqual(pass, APP_PASSWORD)) return next();
+  }
+  res.set("WWW-Authenticate", 'Basic realm="Painel de Prazos"');
+  res.status(401).send("Acesso restrito.");
+}
+
+app.get("/api/health", (req, res) => res.json({ ok: true }));
+app.use(requireAuth);
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -82,8 +115,6 @@ app.put("/api/state", async (req, res) => {
     res.status(500).json({ error: "erro ao salvar estado" });
   }
 });
-
-app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 ensureSchema()
   .then(() => {
